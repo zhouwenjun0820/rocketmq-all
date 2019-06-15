@@ -27,11 +27,10 @@ public abstract class ServiceThread implements Runnable {
     private static final InternalLogger log = InternalLoggerFactory.getLogger(LoggerName.COMMON_LOGGER_NAME);
 
     private static final long JOIN_TIME = 90 * 1000;
-
+    //服务运行线程
     protected final Thread thread;
-    //服务线程数
     protected final CountDownLatch2 waitPoint = new CountDownLatch2(1);
-    //是否已唤醒
+    //是否被通知停止，默认false
     protected volatile AtomicBoolean hasNotified = new AtomicBoolean(false);
     protected volatile boolean stopped = false;
 
@@ -54,6 +53,7 @@ public abstract class ServiceThread implements Runnable {
         log.info("shutdown thread " + this.getServiceName() + " interrupt " + interrupt);
 
         if (hasNotified.compareAndSet(false, true)) {
+            //线程数减去1
             waitPoint.countDown(); // notify
         }
 
@@ -100,19 +100,16 @@ public abstract class ServiceThread implements Runnable {
         log.info("makestop thread " + this.getServiceName());
     }
 
-    //唤醒线程
+    //立刻唤醒服务线程
     public void wakeup() {
-        //如果服务线程未唤醒，则唤醒
         if (hasNotified.compareAndSet(false, true)) {
             waitPoint.countDown(); // notify
         }
     }
 
-    //阻塞服务线程一段时间再运行
+    //服务线程睡眠
     protected void waitForRunning(long interval) {
-        //如果服务未运行
         if (hasNotified.compareAndSet(true, false)) {
-            //执行线程阻塞结束后方法
             this.onWaitEnd();
             return;
         }
@@ -121,12 +118,10 @@ public abstract class ServiceThread implements Runnable {
         waitPoint.reset();
 
         try {
-            //线程等待
             waitPoint.await(interval, TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {
             log.error("Interrupted", e);
         } finally {
-            //
             hasNotified.set(false);
             this.onWaitEnd();
         }
